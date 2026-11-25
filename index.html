@@ -583,45 +583,32 @@ section{position:relative;padding:clamp(4.5rem,10vw,7.5rem) 1.2rem}
   let rT; addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(placeBulbs, 150); });
   document.fonts && document.fonts.ready.then(placeBulbs);
 
-  /* ---------- Cajita musical: Cumpleaños feliz ---------- */
-  let ctx = null, playing = false, loopT = null, nodes = [];
-  const N = {G4:392,A4:440,B4:493.88,C5:523.25,D5:587.33,E5:659.25,F5:698.46,G5:783.99};
-  const song = [
-    ['G4',.75],['G4',.25],['A4',1],['G4',1],['C5',1],['B4',2],
-    ['G4',.75],['G4',.25],['A4',1],['G4',1],['D5',1],['C5',2],
-    ['G4',.75],['G4',.25],['G5',1],['E5',1],['C5',1],['B4',1],['A4',2],
-    ['F5',.75],['F5',.25],['E5',1],['C5',1],['D5',1],['C5',3]
-  ];
-  const beat = 0.42;
-  function chime(freq, t, dur){
-    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain();
-    o1.type = 'sine'; o2.type = 'triangle';
-    o1.frequency.value = freq; o2.frequency.value = freq * 2;
-    const g2 = ctx.createGain(); g2.gain.value = 0.18;
-    o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(0.6, dur * 1.6));
-    o1.start(t); o2.start(t); o1.stop(t + dur * 1.7 + 0.1); o2.stop(t + dur * 1.7 + 0.1);
-    nodes.push(o1, o2);
-  }
-  function playSong(){
-    let t = ctx.currentTime + 0.1, total = 0;
-    song.forEach(([n, d]) => { chime(N[n], t, d * beat); t += d * beat; total += d * beat; });
-    loopT = setTimeout(() => { nodes = []; if (playing) playSong(); }, (total + 2.2) * 1000);
-  }
+  /* ---------- Música: Cumpleaños feliz (archivo de audio, funciona en celular) ---------- */
+  const audio = new Audio('cumple.mp3');
+  audio.loop = true; audio.preload = 'auto'; audio.volume = 0.9;
+  audio.setAttribute('playsinline', '');
+  let playing = false, userStopped = false;
   function setMusic(on){
     const btn = $('#musicBtn');
-    if (on && !playing) {
-      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
-      ctx.resume(); playing = true; playSong();
-    } else if (!on && playing) {
-      playing = false; clearTimeout(loopT);
-      nodes.forEach(n => { try { n.stop(); } catch(e){} }); nodes = [];
+    if (on) {
+      const p = audio.play();
+      playing = true;
+      if (p && p.catch) p.catch(() => { playing = false; btn.setAttribute('aria-pressed','false'); });
+    } else {
+      audio.pause(); playing = false;
     }
     btn.setAttribute('aria-pressed', String(playing));
   }
-  $('#musicBtn').addEventListener('click', () => setMusic(!playing));
+  audio.addEventListener('pause', () => { playing = false; $('#musicBtn').setAttribute('aria-pressed','false'); });
+  audio.addEventListener('play', () => { playing = true; $('#musicBtn').setAttribute('aria-pressed','true'); });
+  // El celular no deja sonar nada sin un toque, así que la música arranca con el primer toque en la página
+  function firstTouch(e){
+    if (e.target.closest && e.target.closest('#musicBtn')) return;
+    if (!userStopped && !playing) setMusic(true);
+    ['pointerdown','touchend','click','keydown'].forEach(ev => removeEventListener(ev, firstTouch, true));
+  }
+  ['pointerdown','touchend','click','keydown'].forEach(ev => addEventListener(ev, firstTouch, true));
+  $('#musicBtn').addEventListener('click', () => { const on = !playing; userStopped = !on; setMusic(on); });
   $('#heroPlay').addEventListener('click', () => {
     setMusic(true);
     $('#oeste').scrollIntoView({behavior: reduce ? 'auto' : 'smooth'});
